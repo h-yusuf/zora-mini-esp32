@@ -1,0 +1,14 @@
+# ESP32-S3 SuperMini
+# 4 MB embedded flash (XMC), 2 MB quad PSRAM (AP_3v3), GPIO0-13 broken out only.
+# Applied on top of sdkconfig.defaults + sdkconfig.defaults.esp32s3.
+
+CONFIG_BREAD_VARIANT_SUPERMINI=y
+
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/v2/4m.csv"
+
+# This module has quad PSRAM, not the DevKit's octal part.
+CONFIG_SPIRAM_MODE_QUAD=y
+
+CONFIG_OLED_SSD1306_128X64=y
