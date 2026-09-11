@@ -24,6 +24,13 @@ private:
     lv_obj_t* chat_message_label_ = nullptr;
     lv_obj_t* eye_left_ = nullptr;
     lv_obj_t* eye_right_ = nullptr;
+    // Arc cap eyes (^_^ happy / droopy sad) and a sunglasses bar (cool),
+    // swapped in per-emotion instead of just resizing the rounded-rect eyes.
+    // A different silhouette reads as a different expression on a small
+    // monochrome display; resizing alone did not.
+    lv_obj_t* eye_left_arc_ = nullptr;
+    lv_obj_t* eye_right_arc_ = nullptr;
+    lv_obj_t* eye_bar_ = nullptr;
     lv_obj_t* info_label_ = nullptr;
     esp_timer_handle_t eye_idle_timer_ = nullptr;
     esp_timer_handle_t info_hide_timer_ = nullptr;
@@ -34,8 +41,15 @@ private:
     int32_t eye_base_width_ = 34;
     int32_t eye_base_height_ = 40;
     int32_t eye_center_y_ = 0;
-    int32_t eye_open_height_ = 40;
-    int32_t eye_y_offset_ = 0;
+    // Per-eye so asymmetric expressions (wink, confused) are possible.
+    int32_t eye_left_height_ = 40;
+    int32_t eye_right_height_ = 40;
+    int32_t eye_left_offset_ = 0;
+    int32_t eye_right_offset_ = 0;
+    bool eyes_circular_ = false;  // full-round corners (love / surprised)
+    bool eyes_arc_ = false;       // show the arc pair instead of the rects
+    bool eyes_arc_down_ = false;  // arc direction when eyes_arc_ is true
+    bool eyes_bar_ = false;       // show the single sunglasses bar
 
     static void EyeIdleTimerCallback(void* arg);
     static void InfoHideTimerCallback(void* arg);

@@ -198,9 +198,12 @@ void OledDisplay::SetEyesHidden(bool hidden) {
     if (hidden) {
         lv_obj_add_flag(eye_left_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(eye_right_, LV_OBJ_FLAG_HIDDEN);
+        if (eye_left_arc_ != nullptr) lv_obj_add_flag(eye_left_arc_, LV_OBJ_FLAG_HIDDEN);
+        if (eye_right_arc_ != nullptr) lv_obj_add_flag(eye_right_arc_, LV_OBJ_FLAG_HIDDEN);
+        if (eye_bar_ != nullptr) lv_obj_add_flag(eye_bar_, LV_OBJ_FLAG_HIDDEN);
     } else {
-        lv_obj_remove_flag(eye_left_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_remove_flag(eye_right_, LV_OBJ_FLAG_HIDDEN);
+        // Restore whichever mode (rect/arc/bar) was active before hiding.
+        ApplyEyeShape();
     }
 }
 
@@ -232,13 +235,50 @@ void OledDisplay::ApplyEyeShape() {
     if (eye_left_ == nullptr || eye_right_ == nullptr) {
         return;
     }
-    int32_t y = eye_center_y_ - eye_open_height_ / 2 + eye_y_offset_;
-    lv_obj_set_height(eye_left_, eye_open_height_);
-    lv_obj_set_height(eye_right_, eye_open_height_);
-    lv_obj_set_y(eye_left_, y);
-    lv_obj_set_y(eye_right_, y);
-    eye_left_base_y_ = y;
-    eye_right_base_y_ = y;
+
+    // Sunglasses bar mode: replaces both eyes/arc entirely.
+    if (eyes_bar_) {
+        lv_obj_add_flag(eye_left_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(eye_right_, LV_OBJ_FLAG_HIDDEN);
+        if (eye_left_arc_ != nullptr) lv_obj_add_flag(eye_left_arc_, LV_OBJ_FLAG_HIDDEN);
+        if (eye_right_arc_ != nullptr) lv_obj_add_flag(eye_right_arc_, LV_OBJ_FLAG_HIDDEN);
+        if (eye_bar_ != nullptr) lv_obj_remove_flag(eye_bar_, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    if (eye_bar_ != nullptr) lv_obj_add_flag(eye_bar_, LV_OBJ_FLAG_HIDDEN);
+
+    // Arc cap mode (happy ^_^ / sad frown): hide the rects, show the arc
+    // pair oriented up or down.
+    if (eyes_arc_ && eye_left_arc_ != nullptr && eye_right_arc_ != nullptr) {
+        lv_obj_add_flag(eye_left_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(eye_right_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(eye_left_arc_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(eye_right_arc_, LV_OBJ_FLAG_HIDDEN);
+        int32_t start = eyes_arc_down_ ? 20 : 200;
+        int32_t end = eyes_arc_down_ ? 160 : 340;
+        lv_arc_set_angles(eye_left_arc_, start, end);
+        lv_arc_set_angles(eye_right_arc_, start, end);
+        return;
+    }
+    if (eye_left_arc_ != nullptr) lv_obj_add_flag(eye_left_arc_, LV_OBJ_FLAG_HIDDEN);
+    if (eye_right_arc_ != nullptr) lv_obj_add_flag(eye_right_arc_, LV_OBJ_FLAG_HIDDEN);
+
+    // Plain rect/circle eyes, sized independently per eye so wink/confused
+    // can be asymmetric.
+    lv_obj_remove_flag(eye_left_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(eye_right_, LV_OBJ_FLAG_HIDDEN);
+    int32_t radius = eyes_circular_ ? LV_RADIUS_CIRCLE : 12;
+    lv_obj_set_style_radius(eye_left_, radius, 0);
+    lv_obj_set_style_radius(eye_right_, radius, 0);
+
+    int32_t yl = eye_center_y_ - eye_left_height_ / 2 + eye_left_offset_;
+    int32_t yr = eye_center_y_ - eye_right_height_ / 2 + eye_right_offset_;
+    lv_obj_set_height(eye_left_, eye_left_height_);
+    lv_obj_set_height(eye_right_, eye_right_height_);
+    lv_obj_set_y(eye_left_, yl);
+    lv_obj_set_y(eye_right_, yr);
+    eye_left_base_y_ = yl;
+    eye_right_base_y_ = yr;
 }
 
 void OledDisplay::SetupUI_128x64() {
@@ -274,8 +314,10 @@ void OledDisplay::SetupUI_128x64() {
     eye_base_width_ = eye_w;
     eye_base_height_ = eye_h;
     eye_center_y_ = start_y + eye_h / 2;
-    eye_open_height_ = eye_h;
-    eye_y_offset_ = 0;
+    eye_left_height_ = eye_h;
+    eye_right_height_ = eye_h;
+    eye_left_offset_ = 0;
+    eye_right_offset_ = 0;
 
     eye_left_ = lv_obj_create(container_);
     lv_obj_set_size(eye_left_, eye_w, eye_h);
@@ -297,19 +339,60 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_remove_flag(eye_right_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_user_data(eye_right_, this);
 
+    // Arc cap eyes: a rounded arc that reads as "⌒" (happy, cap up) or "⌣"
+    // (sad, cap down) depending on the angles SetEmotion() applies via
+    // ApplyEyeShape(). Swapped in instead of just resizing the rects above -
+    // a different silhouette actually reads as a different expression on a
+    // small monochrome display; resizing alone did not.
+    const int32_t arc_size = 30;
+    auto make_arc = [&](int32_t center_x) {
+        lv_obj_t* arc = lv_arc_create(container_);
+        lv_obj_set_size(arc, arc_size, arc_size);
+        lv_obj_set_pos(arc, center_x - arc_size / 2, eye_center_y_ - arc_size / 2);
+        lv_arc_set_bg_angles(arc, 0, 360);
+        lv_arc_set_angles(arc, 200, 340);  // default: top cap "⌒" (happy)
+        lv_obj_set_style_arc_opa(arc, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_arc_color(arc, lv_color_white(), LV_PART_INDICATOR);
+        lv_obj_set_style_arc_width(arc, 6, LV_PART_INDICATOR);
+        lv_obj_set_style_arc_rounded(arc, true, LV_PART_INDICATOR);
+        lv_obj_set_style_bg_opa(arc, LV_OPA_TRANSP, LV_PART_KNOB);
+        lv_obj_set_style_pad_all(arc, 0, LV_PART_KNOB);
+        lv_obj_remove_flag(arc, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_remove_flag(arc, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(arc, LV_OBJ_FLAG_HIDDEN);
+        return arc;
+    };
+    eye_left_arc_ = make_arc(eye_left_base_x_ + eye_w / 2);
+    eye_right_arc_ = make_arc(eye_right_base_x_ + eye_w / 2);
+
+    // Sunglasses bar: a single wide bar spanning both eyes, for "cool".
+    eye_bar_ = lv_obj_create(container_);
+    lv_obj_set_size(eye_bar_, total_w, 10);
+    lv_obj_set_pos(eye_bar_, start_x, eye_center_y_ - 5);
+    lv_obj_set_style_radius(eye_bar_, 4, 0);
+    lv_obj_set_style_bg_color(eye_bar_, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(eye_bar_, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(eye_bar_, 0, 0);
+    lv_obj_remove_flag(eye_bar_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(eye_bar_, LV_OBJ_FLAG_HIDDEN);
+
     // Blink animation: shrink height down then back up, pause, repeat forever.
-    // Driven as a percentage of the *current* emotion's open height, so
-    // SetEmotion() can change eye shape without fighting the blink cycle.
+    // Driven per-eye off the *current* emotion's target height, so
+    // SetEmotion() can change eye shape (including asymmetric wink/confused)
+    // without fighting the blink cycle.
     static lv_anim_t blink_anim;
     lv_anim_init(&blink_anim);
     lv_anim_set_exec_cb(&blink_anim, [](void* var, int32_t value) {
         lv_obj_t* eye = static_cast<lv_obj_t*>(var);
         auto* self = static_cast<OledDisplay*>(lv_obj_get_user_data(eye));
         if (self == nullptr) return;
-        int32_t h = self->eye_open_height_ * value / 100;
+        bool is_left = (eye == self->eye_left_);
+        int32_t base_h = is_left ? self->eye_left_height_ : self->eye_right_height_;
+        int32_t off = is_left ? self->eye_left_offset_ : self->eye_right_offset_;
+        int32_t h = base_h * value / 100;
         if (h < 4) h = 4;
         lv_obj_set_height(eye, h);
-        lv_obj_set_y(eye, self->eye_center_y_ - h / 2 + self->eye_y_offset_);
+        lv_obj_set_y(eye, self->eye_center_y_ - h / 2 + off);
     });
     lv_anim_set_values(&blink_anim, 100, 8);
     lv_anim_set_duration(&blink_anim, 120);
@@ -447,38 +530,63 @@ void OledDisplay::SetEmotion(const char* emotion) {
     if (eye_left_ != nullptr && eye_right_ != nullptr && emotion != nullptr) {
         ESP_LOGI(TAG, "SetEmotion: %s", emotion);
         DisplayLockGuard lock(this);
-        // Map server emotions onto simple RoboEyes-style eye shapes.
+        // Reset to plain symmetric rect eyes; each branch below overrides
+        // only what it needs so every bucket gets a genuinely different
+        // silhouette, not just a resized version of the same shape.
+        eyes_arc_ = false;
+        eyes_bar_ = false;
+        eyes_circular_ = false;
+        eye_left_height_ = eye_base_height_;
+        eye_right_height_ = eye_base_height_;
+        eye_left_offset_ = 0;
+        eye_right_offset_ = 0;
+
         if (strcmp(emotion, "happy") == 0 || strcmp(emotion, "laughing") == 0 ||
-            strcmp(emotion, "funny") == 0 || strcmp(emotion, "loving") == 0 ||
-            strcmp(emotion, "kissy") == 0 || strcmp(emotion, "relaxed") == 0 ||
-            strcmp(emotion, "cool") == 0 || strcmp(emotion, "confident") == 0 ||
-            strcmp(emotion, "winking") == 0 || strcmp(emotion, "silly") == 0 ||
-            strcmp(emotion, "delicious") == 0) {
-            // Happy squint.
-            eye_open_height_ = eye_base_height_ * 45 / 100;
-            eye_y_offset_ = eye_base_height_ / 6;
+            strcmp(emotion, "funny") == 0 || strcmp(emotion, "delicious") == 0) {
+            // Smiling cap, "⌒" / ^_^.
+            eyes_arc_ = true;
+            eyes_arc_down_ = false;
+        } else if (strcmp(emotion, "loving") == 0 || strcmp(emotion, "kissy") == 0) {
+            // Small round, sparkling eyes.
+            eyes_circular_ = true;
+            eye_left_height_ = eye_base_height_ * 55 / 100;
+            eye_right_height_ = eye_left_height_;
+        } else if (strcmp(emotion, "cool") == 0 || strcmp(emotion, "confident") == 0 ||
+                   strcmp(emotion, "silly") == 0) {
+            // Sunglasses bar.
+            eyes_bar_ = true;
+        } else if (strcmp(emotion, "relaxed") == 0 || strcmp(emotion, "sleepy") == 0) {
+            // Thin, centered, half-closed sliver - calm, not droopy.
+            eye_left_height_ = eye_base_height_ * 20 / 100;
+            eye_right_height_ = eye_left_height_;
         } else if (strcmp(emotion, "sad") == 0 || strcmp(emotion, "crying") == 0 ||
-                   strcmp(emotion, "embarrassed") == 0 || strcmp(emotion, "confused") == 0 ||
-                   strcmp(emotion, "sleepy") == 0) {
-            // Droopy, half-lidded.
-            eye_open_height_ = eye_base_height_ * 35 / 100;
-            eye_y_offset_ = eye_base_height_ / 3;
-        } else if (strcmp(emotion, "angry") == 0 || strcmp(emotion, "shocked") == 0) {
-            // Narrowed, slightly raised.
-            eye_open_height_ = eye_base_height_ * 55 / 100;
-            eye_y_offset_ = -eye_base_height_ / 8;
-        } else if (strcmp(emotion, "surprised") == 0) {
-            // Wide open.
-            eye_open_height_ = eye_base_height_ * 130 / 100;
-            eye_y_offset_ = 0;
-        } else if (strcmp(emotion, "thinking") == 0) {
-            eye_open_height_ = eye_base_height_ * 70 / 100;
-            eye_y_offset_ = -eye_base_height_ / 8;
-        } else {
-            // neutral and anything unrecognized.
-            eye_open_height_ = eye_base_height_;
-            eye_y_offset_ = 0;
+                   strcmp(emotion, "embarrassed") == 0) {
+            // Frowning cap, "⌣", drooping.
+            eyes_arc_ = true;
+            eyes_arc_down_ = true;
+        } else if (strcmp(emotion, "confused") == 0 || strcmp(emotion, "thinking") == 0) {
+            // Asymmetric - one eye raised, one lowered: quizzical look.
+            eye_left_height_ = eye_base_height_ * 70 / 100;
+            eye_left_offset_ = -eye_base_height_ / 6;
+            eye_right_height_ = eye_base_height_ * 40 / 100;
+            eye_right_offset_ = eye_base_height_ / 6;
+        } else if (strcmp(emotion, "surprised") == 0 || strcmp(emotion, "shocked") == 0) {
+            // Big, round, wide-open eyes.
+            eyes_circular_ = true;
+            eye_left_height_ = eye_base_height_ * 130 / 100;
+            eye_right_height_ = eye_left_height_;
+        } else if (strcmp(emotion, "angry") == 0) {
+            // Narrow and raised - serious/annoyed.
+            eye_left_height_ = eye_base_height_ * 35 / 100;
+            eye_left_offset_ = -eye_base_height_ / 8;
+            eye_right_height_ = eye_left_height_;
+            eye_right_offset_ = eye_left_offset_;
+        } else if (strcmp(emotion, "winking") == 0) {
+            // One eye shut, one open.
+            eye_right_height_ = 4;
         }
+        // else: neutral / unrecognized - keep the reset defaults above.
+
         ApplyEyeShape();
         return;
     }
