@@ -3,8 +3,9 @@
 
 #include <driver/gpio.h>
 
-// ESP32-S3 SuperMini only breaks out GPIO0-13, so every pin below stays in
-// that range. See docs/wiring-bread-compact-wifi.md for the full wiring.
+// ESP32-S3 DevKit N16R8 exposes the full GPIO range, so pins below are not
+// constrained to GPIO0-13 the way the SuperMini variant is. See
+// docs/wiring-bread-compact-wifi.md for the full wiring.
 
 #define AUDIO_INPUT_SAMPLE_RATE  16000
 #define AUDIO_OUTPUT_SAMPLE_RATE 24000
@@ -21,8 +22,8 @@
 
 // Amp: MAX98357A (I2S digital, no separate DAC needed).
 #define AUDIO_I2S_SPK_GPIO_DOUT GPIO_NUM_7
-#define AUDIO_I2S_SPK_GPIO_BCLK GPIO_NUM_10
-#define AUDIO_I2S_SPK_GPIO_LRCK GPIO_NUM_11
+#define AUDIO_I2S_SPK_GPIO_BCLK GPIO_NUM_15
+#define AUDIO_I2S_SPK_GPIO_LRCK GPIO_NUM_16
 
 #else
 
@@ -36,8 +37,8 @@
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0
 
 // Display: SSD1306 128x64 over I2C, address 0x3C.
-#define DISPLAY_SDA_PIN GPIO_NUM_8
-#define DISPLAY_SCL_PIN GPIO_NUM_9
+#define DISPLAY_SDA_PIN GPIO_NUM_41
+#define DISPLAY_SCL_PIN GPIO_NUM_42
 #define DISPLAY_WIDTH   128
 
 #if CONFIG_OLED_SSD1306_128X32

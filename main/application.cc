@@ -722,6 +722,12 @@ void Application::ShowActivationCode(const std::string& code, const std::string&
          digit_sound{'6', Lang::Sounds::OGG_6}, digit_sound{'7', Lang::Sounds::OGG_7},
          digit_sound{'8', Lang::Sounds::OGG_8}, digit_sound{'9', Lang::Sounds::OGG_9}}};
 
+    // Upstream only conveys the code via spoken audio (one digit at a time
+    // below); log it and put it on screen too so it can be read instead of
+    // having to listen carefully.
+    ESP_LOGI(TAG, "Activation code: %s", code.c_str());
+    Board::GetInstance().GetDisplay()->ShowInfoText(code.c_str(), 60000);
+
     // This sentence uses 9KB of SRAM, so we need to wait for it to finish
     Alert(Lang::Strings::ACTIVATION, message.c_str(), "link", Lang::Sounds::OGG_ACTIVATION);
 

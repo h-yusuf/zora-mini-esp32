@@ -1,7 +1,7 @@
-# SETUP — ESP32-S3 SuperMini
+# SETUP — ESP32-S3 DevKit N16R8
 
-Branch ini dikhususkan untuk satu board: **ESP32-S3 SuperMini** (4 MB flash,
-2 MB PSRAM Quad, header hanya GPIO0-13), dengan mic INMP441, OLED SSD1306
+Branch ini dikhususkan untuk satu board: **ESP32-S3 DevKit N16R8** (16 MB
+flash, 8 MB PSRAM Octal, full GPIO breakout), dengan mic INMP441, OLED SSD1306
 128x64, dan amplifier MAX98357A.
 
 - Wiring detail: [`docs/wiring-bread-compact-wifi.md`](docs/wiring-bread-compact-wifi.md)
@@ -35,8 +35,8 @@ dipakai — gunakan `activate_idf_v6.1.sh`.
 
 ## 2. Build & flash
 
-Tidak ada pilihan board di branch ini — semua sudah default ke SuperMini
-lewat `sdkconfig.defaults.esp32s3`, jadi tinggal:
+Tidak ada pilihan board di branch ini — semua sudah default ke N16R8 lewat
+`sdkconfig.defaults.esp32s3`, jadi tinggal:
 
 ```bash
 source ~/.espressif/tools/activate_idf_v6.1.sh
@@ -44,11 +44,15 @@ idf.py set-target esp32s3   # sekali saja, atau setelah git clean
 idf.py build flash monitor
 ```
 
+Board ini punya **2 port USB-C**: pakai yang berlabel **`COM`/`UART`** buat
+flash & monitor, bukan yang berlabel `USB` (native — auto-reset gak jalan di
+situ, hasilnya `Failed to connect: No serial data received`).
+
 Kalau port tidak otomatis kedeteksi: `idf.py -p /dev/cu.usbmodem101 flash monitor`.
 Keluar dari monitor: `Ctrl+]`.
 
-`set-target esp32s3` otomatis memilih board `bread-compact-wifi`, flash 4 MB,
-partition `partitions/v2/4m.csv`, PSRAM Quad, dan panel `SSD1306 128x64` —
+`set-target esp32s3` otomatis memilih board `bread-compact-wifi`, flash 16 MB,
+partition `partitions/v2/16m.csv`, PSRAM Octal, dan panel `SSD1306 128x64` —
 semuanya lewat `sdkconfig.defaults.esp32s3`, tanpa menuconfig manual.
 
 ---
@@ -56,7 +60,7 @@ semuanya lewat `sdkconfig.defaults.esp32s3`, tanpa menuconfig manual.
 ## 3. Menjalankan pertama kali
 
 1. **Flash**, lalu buka monitor.
-2. **Provisioning WiFi** — device membuat AP sendiri `Xiaozhi-XXXX`. Sambungkan
+2. **Provisioning WiFi** — device membuat AP sendiri `Zora-XXXX`. Sambungkan
    laptop/HP ke AP itu, buka `http://192.168.4.1`, masukkan SSID + password.
    Matikan data seluler kalau lewat HP, kalau tidak browser akan mencari internet
    ke jalur lain.
@@ -80,7 +84,7 @@ Di log, `>>` adalah hasil transkrip suara kamu (STT) dan `<<` balasan asisten.
 
 ## 4. Verifikasi hardware
 
-Tiap boot menjalankan self-test mic otomatis, jadi tidak perlu menunggu cloud:
+Tiap boot menjalankan self-test mic & speaker otomatis, jadi tidak perlu menunggu cloud:
 
 | Log | Arti |
 |---|---|
@@ -90,9 +94,9 @@ Tiap boot menjalankan self-test mic otomatis, jadi tidak perlu menunggu cloud:
 | `frames_all_zero=60` | mic tidak dapat supply / kontak, jalur data mati |
 | `frames_stuck_high=...` | jalur data mengambang |
 | `peak=32767` | sinyal clipping, gain terlalu tinggi |
+| `Speaker self test: playing 1000 Hz tone` | nada tes speaker diputar ~1.5 detik |
 
-Speaker: device memainkan nada sukses setelah aktivasi. Kalau senyap, tarik pin
-`SD` MAX98357A ke 3V3 dan pastikan `VIN` di 5 V.
+Kalau speaker senyap, tarik pin `SD` MAX98357A ke 3V3 dan pastikan `VIN` di 5 V.
 
 ---
 
@@ -112,8 +116,9 @@ Speaker: device memainkan nada sukses setelah aktivasi. Kalau senyap, tarik pin
   Pair `*IDR` → Indodax (pasar Indonesia, realtime), `*USD` → Binance spot.
   **Double-click BOOT** memutar `usdidr` → `btcidr` → `ethidr` untuk tes tanpa suara.
 
-Board ini hanya punya 3 komponen fisik (mic, LCD, ampli) plus tombol BOOT bawaan
-— tidak ada LED, tombol touch/volume, atau lamp.
+Board ini disederhanakan ke 3 komponen fisik (mic, LCD, ampli) plus tombol BOOT
+bawaan — tidak ada LED, tombol touch/volume, atau lamp, walau devkit N16R8
+sebenarnya punya pin untuk itu (GPIO48/47/40/39/18).
 
 ---
 
@@ -126,8 +131,20 @@ macOS menahan aksesori USB baru. Approve pop-up "Allow accessory to connect",
 atau System Settings → Privacy & Security → Accessories. Device terlihat di
 `ioreg -p IOUSB` tapi tanpa node `/dev/cu.*` = izin belum diberikan.
 
+**`Failed to connect to ESP32-S3: No serial data received`**
+Kabel tertancap di port **USB** (native) bukan **COM**. Auto-reset DTR/RTS hanya
+ada di jalur COM. Pindahkan kabel.
+
 **`Could not exclusively lock port ... Resource temporarily unavailable`**
 Monitor masih terbuka dan memegang port. Tutup dengan `Ctrl+]` sebelum flash.
+
+**Board boot-loop, `PSRAM chip is not connected, or wrong PSRAM line mode`**
+Config PSRAM salah (Quad vs Octal). N16R8 pakai **Octal** — cek
+`CONFIG_SPIRAM_MODE_OCT=y` di sdkconfig.
+
+**`generated_assets.bin will not fit in ... bytes of flash`**
+Config flash size salah untuk board ini. N16R8 butuh 16 MB /
+`partitions/v2/16m.csv`, bukan profil 4 MB.
 
 **Layar menyala tapi warnanya kebalik**
 `esp_lcd_panel_invert_color(panel_, true)` di `compact_wifi_board.cc`.
@@ -170,7 +187,7 @@ dari ESP32 classic). Pakai MAX98357A yang menerima I2S digital langsung.
 **TWS Bluetooth tidak bisa**
 ESP32-S3 hanya punya BLE, tanpa Bluetooth Classic, jadi A2DP/HFP tidak tersedia.
 
-**`getaddrinfo() returns 202` saat menghubungi `api.tenclass.net`**
+**`getaddrinfo() returns 202` saat menghubungi server**
 DNS gagal, biasanya transient beberapa detik pertama setelah boot; device retry
 otomatis tiap 10 detik. Kalau menetap, jaringannya memang tanpa DNS/internet.
 

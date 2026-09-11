@@ -1,4 +1,4 @@
-# ESP32-S3 SuperMini — Status Build (xiaozhi-esp32)
+# ESP32-S3 DevKit N16R8 — Status Build (xiaozhi-esp32)
 
 Branch ini dikhususkan untuk satu device. Cara build & flash:
 [`SETUP.md`](../SETUP.md). Wiring lengkap: [`wiring-bread-compact-wifi.md`](wiring-bread-compact-wifi.md).
@@ -7,25 +7,31 @@ Branch ini dikhususkan untuk satu device. Cara build & flash:
 
 | Item | Detail |
 |---|---|
-| Chip | ESP32-S3 (QFN56), rev v0.2 |
-| Flash | 4 MB embedded (XMC), QIO @ 80 MHz |
-| PSRAM | 2 MB embedded, **Quad** (AP_3v3, gen 3) @ 80 MHz |
-| GPIO ter-breakout | GPIO0-13 saja, plus 5V/GND/3V3/TX/RX |
-| USB | native USB-Serial/JTAG (VID `0x303A`, PID `0x1001`), tanpa bridge CP210x/CH340 |
+| Chip | ESP32-S3, rev v0.2 |
+| Flash | 16 MB, QIO @ 80 MHz |
+| PSRAM | 8 MB, **Octal** @ 80 MHz |
+| GPIO | full breakout (bukan seperti SuperMini yang cuma GPIO0-13) |
+| USB | **2 port USB-C** — `COM`/`UART` (bridge, dipakai buat flash/monitor) dan
+  `USB` (native, auto-reset gak jalan di situ) |
 | Firmware | xiaozhi v2.4.2, ESP-IDF v6.1 |
 | Board config | `bread-compact-wifi` |
+| Backend | **Zora Bridge** (self-host), lewat `CONFIG_OTA_URL` di
+  `main/Kconfig.projbuild` — bukan lagi `api.tenclass.net` |
 
 ## Yang Sudah Terintegrasi ✅
 
-- **WiFi**: provisioning via AP (`Xiaozhi-XXXX` → `http://192.168.4.1`).
-- **Aktivasi device**: linked ke akun xiaozhi.me (kode aktivasi via serial log).
-- **OTA check**: cek versi firmware ke `api.tenclass.net` tiap boot.
-- **MQTT**: koneksi ke server xiaozhi buat komunikasi voice assistant.
+- **WiFi**: provisioning via AP (`Zora-XXXX` → `http://192.168.4.1`).
+- **OTA check**: cek versi firmware & alamat server (MQTT/WebSocket) ke
+  `CONFIG_OTA_URL` (Zora Bridge) tiap boot — lihat `main/ota.cc`.
+- **MQTT/WebSocket**: koneksi ke server percakapan sesuai respons OTA check
+  (`main/protocols/mqtt_protocol.cc` / `websocket_protocol.cc`).
 - **Wake word**: model `wn9_nihaoxiaozhi_tts` ("你好小智") aktif, WebRTC VAD.
 - **Mic INMP441** (GPIO4/5/6): self-test otomatis tiap boot, sebelum WiFi/cloud
   terlibat (`MicSelfTest()` di `compact_wifi_board.cc`).
-- **Amplifier MAX98357A** (GPIO7/10/11): I2S digital langsung, tanpa DAC tambahan.
-- **Display OLED SSD1306 128x64 (I2C, GPIO8/9)**:
+- **Amplifier MAX98357A** (GPIO7/15/16): I2S digital langsung, tanpa DAC
+  tambahan. Nada tes 1 kHz diputar otomatis tiap boot (`SpeakerSelfTest()`),
+  juga sebelum WiFi/cloud terlibat.
+- **Display OLED SSD1306 128x64 (I2C, GPIO41/42)**:
   - Address `0x3C`/`0x3D` diprobe otomatis; kalau tidak ada yang menjawab,
     device tetap boot tanpa display (`NoDisplay`), tidak hang.
   - Color inverted (`invert_color(true)`) — mata nyala terang, background gelap.
@@ -60,12 +66,14 @@ Branch ini dikhususkan untuk satu device. Cara build & flash:
   upgrade_firmware, screen (get_info/snapshot/preview_image/set_theme),
   assets download url.
 - **Tombol**: hanya BOOT (GPIO0) — tidak ada LED, touch, volume, atau lamp
-  di board ini (dihapus dari kode, bukan sekadar dimatikan).
+  dipakai di board ini (dihapus dari kode, bukan sekadar dimatikan), walau
+  devkit N16R8 punya pin fisik untuk semua itu (GPIO48/47/40/39/18).
 
 ## Riwayat Masalah yang Sudah Diperbaiki
 
-1. Config PSRAM salah waktu bring-up (Octal → harus **Quad** untuk SuperMini)
-   → boot-loop `PSRAM chip is not connected, or wrong PSRAM line mode`.
+1. Config PSRAM salah waktu bring-up di modul lain (SuperMini butuh **Quad**,
+   N16R8 butuh **Octal**) → salah pilih bikin boot-loop
+   `PSRAM chip is not connected, or wrong PSRAM line mode`.
 2. Race condition: notifikasi ketutup jam tiap 1 detik (clock tick) → di-fix
    dengan guard `notification_showing` di `UpdateStatusBar()`.
 3. OLED awalnya di-drive sebagai 128x32 padahal fisiknya 128x64 → diperbaiki
@@ -86,6 +94,9 @@ Branch ini dikhususkan untuk satu device. Cara build & flash:
    (update sekali per hari kerja, bukan realtime) → diganti Indodax/Binance.
    `wttr.in` gagal TLS handshake di device ini (`mbedtls -0x0050`), diganti
    open-meteo.
+8. Kabel flash/monitor tertancap di port **USB** (native) bikin
+   `Failed to connect: No serial data received` — devkit N16R8 harus lewat
+   port **COM**, auto-reset DTR/RTS gak ada di jalur USB native.
 
 Catatan: log `esp-tls-mbedtls: read error :-0x004C` / `SSL receive failed: -76`
 muncul di setiap request HTTPS ini. Itu server menutup koneksi TLS tanpa
@@ -101,6 +112,7 @@ tidak spam):
   dari jalur I2S.
 - `CompactWifiBoard: BOOT button clicked` — konfirmasi tombol terbaca.
 - `CompactWifiBoard: Mic self test: ...` — sekali tiap boot, sebelum cloud.
+- `CompactWifiBoard: Speaker self test: ...` — sekali tiap boot, sebelum cloud.
 - `CompactWifiBoard: I2C idle levels: ...` — level SDA/SCL saat idle, sebelum
   bus di-init.
 
