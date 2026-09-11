@@ -56,19 +56,23 @@ semuanya lewat `sdkconfig.defaults.esp32s3`, tanpa menuconfig manual.
 ## 3. Menjalankan pertama kali
 
 1. **Flash**, lalu buka monitor.
-2. **Provisioning WiFi** — device membuat AP sendiri `Xiaozhi-XXXX`. Sambungkan
+2. **Provisioning WiFi** — device membuat AP sendiri `Zora-XXXX`. Sambungkan
    laptop/HP ke AP itu, buka `http://192.168.4.1`, masukkan SSID + password.
    Matikan data seluler kalau lewat HP, kalau tidak browser akan mencari internet
    ke jalur lain.
-3. **Aktivasi** — device menampilkan kode 6 digit. Tanpa layar terpasang, ambil
-   dari log monitor; barisnya seperti:
+3. **Aktivasi** — device menampilkan kode alfanumerik (bukan cuma angka).
+   Muncul di log monitor **dan** di layar OLED (`ShowInfoText`, nahan 60 detik);
+   dibunyikan juga lewat speaker kalau sudah kepasang (digit huruf dilewatin,
+   suara doang gak cukup buat kode alfanumerik). Barisnya di log seperti:
    ```
-   Application: Alert [link] 激活设备: xiaozhi.me
-   403937
+   Application: Alert [link] 激活设备: Masukkan kode ini di dashboard untuk memasangkan device
+   Application: Activation code: H9HE97
    ```
-   Buka [xiaozhi.me](https://xiaozhi.me) → **Add Device** → masukkan kode.
-4. **Reset device** setelah ter-link supaya keluar dari loop `Activating`.
-5. Setelah `Activation done` dan state `activating -> idle`, device siap.
+   Buka dashboard **Zora Bridge** → masukkan kode itu buat memasangkan device.
+4. Device polling `Activating... N/10` tiap ~3 detik (HTTP 202 = normal, masih
+   nunggu kode diklaim) sampai kamu masukkan kode di dashboard.
+5. Setelah diklaim, `Activate()` balik `200` → device lanjut ke
+   `activating -> idle`, siap dipakai.
 
 Percakapan: klik tombol **BOOT sekali**, lalu **langsung** bicara tanpa jeda.
 Tombol itu toggle — klik kedua menutup sesi, jadi jangan diklik dua kali. Sesi
@@ -170,7 +174,7 @@ dari ESP32 classic). Pakai MAX98357A yang menerima I2S digital langsung.
 **TWS Bluetooth tidak bisa**
 ESP32-S3 hanya punya BLE, tanpa Bluetooth Classic, jadi A2DP/HFP tidak tersedia.
 
-**`getaddrinfo() returns 202` saat menghubungi `api.tenclass.net`**
+**`getaddrinfo() returns 202` saat menghubungi server**
 DNS gagal, biasanya transient beberapa detik pertama setelah boot; device retry
 otomatis tiap 10 detik. Kalau menetap, jaringannya memang tanpa DNS/internet.
 
@@ -201,6 +205,9 @@ Ctrl+]
 
 # Cek port yang lagi nyolok
 ls /dev/cu.usbmodem*
+
+# Lihat kode aktivasi doang (cuma muncul kalau device belum di-claim di dashboard)
+idf.py -p /dev/cu.usbmodem101 monitor | grep "Activation code"
 
 # Bersihin total & mulai dari nol (kalau config aneh/nyangkut)
 rm -rf build sdkconfig

@@ -14,13 +14,18 @@ Branch ini dikhususkan untuk satu device. Cara build & flash:
 | USB | native USB-Serial/JTAG (VID `0x303A`, PID `0x1001`), tanpa bridge CP210x/CH340 |
 | Firmware | xiaozhi v2.4.2, ESP-IDF v6.1 |
 | Board config | `bread-compact-wifi` |
+| Backend | **Zora Bridge** (self-host), lewat `CONFIG_OTA_URL` di
+  `main/Kconfig.projbuild` — bukan lagi `api.tenclass.net` |
 
 ## Yang Sudah Terintegrasi ✅
 
-- **WiFi**: provisioning via AP (`Xiaozhi-XXXX` → `http://192.168.4.1`).
-- **Aktivasi device**: linked ke akun xiaozhi.me (kode aktivasi via serial log).
-- **OTA check**: cek versi firmware ke `api.tenclass.net` tiap boot.
-- **MQTT**: koneksi ke server xiaozhi buat komunikasi voice assistant.
+- **WiFi**: provisioning via AP (`Zora-XXXX` → `http://192.168.4.1`).
+- **OTA check**: cek versi firmware & alamat server (MQTT/WebSocket) ke
+  `CONFIG_OTA_URL` (Zora Bridge, path `/ota/check_version`) tiap boot.
+- **Aktivasi device**: kode alfanumerik ditampilkan di layar (`ShowInfoText`)
+  dan di-log (`Activation code: ...`) selain dibunyikan lewat speaker —
+  dimasukkan manual ke dashboard Zora Bridge.
+- **MQTT/WebSocket**: koneksi ke server percakapan sesuai respons OTA check.
 - **Wake word**: model `wn9_nihaoxiaozhi_tts` ("你好小智") aktif, WebRTC VAD.
 - **Mic INMP441** (GPIO4/5/6): self-test otomatis tiap boot, sebelum WiFi/cloud
   terlibat (`MicSelfTest()` di `compact_wifi_board.cc`).
